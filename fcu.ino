@@ -161,22 +161,22 @@ void loop()
   // TODO : motor control
 
   // Print estimation and control data
-  // LOG_PORT.print("Orientation:\t");
-  // for(int r = 0; r < 3; r++) {
-  //   for(int c = 0; c < 3; c++) {
-  //     LOG_PORT.print(R(r,c));
-  //     LOG_PORT.print("\t");
-  //   }
-  // }
-  // for(int i = 0; i < 3; i++) {
-  //   LOG_PORT.print(Om(i));
-  //   LOG_PORT.print("\t");
-  // }
-  //
-  // LOG_PORT << M(0) << '\t' << M(1) << '\t' << M(2) << '\t';
-  LOG_PORT << u(0) << '\t' << u(1) << '\t' << u(2) << '\t'  << u(3) << '\t';
-  LOG_PORT << wsq(0) << '\t' << wsq(1) << '\t' << wsq(2) << '\t'  << wsq(3) << '\t';
-  LOG_PORT << w(0) << '\t' << w(1) << '\t' << w(2) << '\t'  << w(3) << '\t';
+  LOG_PORT.print("Orientation:\t");
+  for(int r = 0; r < 3; r++) {
+    for(int c = 0; c < 3; c++) {
+      LOG_PORT.print(R(r,c));
+      LOG_PORT.print("\t");
+    }
+  }
+  for(int i = 0; i < 3; i++) {
+    LOG_PORT.print(Om(i));
+    LOG_PORT.print("\t");
+  }
+
+  LOG_PORT << M(0) << '\t' << M(1) << '\t' << M(2) << '\t';
+  // LOG_PORT << u(0) << '\t' << u(1) << '\t' << u(2) << '\t'  << u(3) << '\t';
+  // LOG_PORT << wsq(0) << '\t' << wsq(1) << '\t' << wsq(2) << '\t'  << wsq(3) << '\t';
+  // LOG_PORT << w(0) << '\t' << w(1) << '\t' << w(2) << '\t'  << w(3) << '\t';
   LOG_PORT.println();
 
   // LOG_PORT << W << "\n";
