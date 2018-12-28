@@ -1,11 +1,18 @@
 #include <SparkFunMPU9250-DMP.h>
+#include <BasicLinearAlgebra.h>
+#include <MadgwickAHRS.h>
 
 #include "config.h"
 
 // Flash storage (for nv storage on ATSAMD21)
 #include <FlashStorage.h>
 
+using namespace BLA;
+
+
 MPU9250_DMP imu; // Create an instance of the MPU9250_DMP class
+
+Madgwick filter;
 
 uint32_t lastBlink = 0;
 void blinkLED()
@@ -31,15 +38,21 @@ void setup()
     while (1) ;
   }
 
+  filter.begin(CONTROL_FREQ);
+
 }
+
+float yaw;
+float pitch;
+float roll;
 
 void loop()
 {
 
   // 1kHz loop frequency regulator
   static uint32_t lastUpdate = 0;
-  uint32_t now = millis();
-  if (now <= lastUpdate) {
+  uint32_t now = micros();
+  if (now - lastUpdate < CONTROL_DT) {
     return;
   }
   lastUpdate = now;
@@ -56,43 +69,36 @@ void loop()
   if ( imu.dmpUpdateFifo() != INV_SUCCESS )
     return; // If that fails (uh, oh), return to top
 
-  printData();
+  float ax = imu.calcAccel(imu.ax);
+  float ay = imu.calcAccel(imu.ay);
+  float az = imu.calcAccel(imu.az);
+
+  float gx = imu.calcGyro(imu.gx);
+  float gy = imu.calcGyro(imu.gy);
+  float gz = imu.calcGyro(imu.gz);
+
+  filter.updateIMU(gx, gy, gz, ax, ay, az);
+
+  roll = filter.getRoll();
+  pitch = filter.getPitch();
+  yaw = filter.getYaw();
+  LOG_PORT.print("Orientation: ");
+  LOG_PORT.print(yaw);
+  LOG_PORT.print(" ");
+  LOG_PORT.print(pitch);
+  LOG_PORT.print(" ");
+  LOG_PORT.println(roll);
 
 }
 
-void printData(void)
-{
-  String imuLog = ""; // Create a fresh line to log
-
-  // imuLog += String(imu.calcAccel(imu.ax)) + ", ";
-  // imuLog += String(imu.calcAccel(imu.ay)) + ", ";
-  // imuLog += String(imu.calcAccel(imu.az)) + ", ";
-  //
-  // imuLog += String(imu.calcGyro(imu.gx)) + ", ";
-  // imuLog += String(imu.calcGyro(imu.gy)) + ", ";
-  // imuLog += String(imu.calcGyro(imu.gz)) + ", ";
-  //
-  // imuLog += String(imu.calcMag(imu.mx)) + ", ";
-  // imuLog += String(imu.calcMag(imu.my)) + ", ";
-  // imuLog += String(imu.calcMag(imu.mz)) + ", ";
-  //
-  imuLog += String(imu.calcQuat(imu.qw), 4) + ", ";
-  imuLog += String(imu.calcQuat(imu.qx), 4) + ", ";
-  imuLog += String(imu.calcQuat(imu.qy), 4) + ", ";
-  imuLog += String(imu.calcQuat(imu.qz), 4) + ", ";
-  //
-  // imu.computeEulerAngles();
-  // imuLog += String(imu.pitch, 2) + ", ";
-  // imuLog += String(imu.roll, 2) + ", ";
-  // imuLog += String(imu.yaw, 2) + ", ";
-
-  // Remove last comma/space:
-  imuLog.remove(imuLog.length() - 2, 2);
-  imuLog += "\r\n"; // Add a new line
-
-  LOG_PORT.print(imuLog); // Print log line to serial port
-
-}
+// Matrix<3,3> rotationFromQuaternion(float qw, float qx, float qy, float qz) {
+//   Matrix<3,3> R = {
+//     1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw,     2*qx*qz + 2*qy*qw,
+//     2*qx*qy + 2*qz*qw,     1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw,
+//     2*qx*qz - 2*qy*qw,     2*qy*qz + 2*qx*qw,     1 - 2*qx*qx - 2*qy*qy
+//   };
+//   return R;
+// }
 
 void initHardware(void)
 {
@@ -126,15 +132,11 @@ bool initIMU(void)
 
   // (note: this value will be overridden by the DMP sample rate)
   imu.setSampleRate(IMU_AG_SAMPLE_RATE); // accel and gyro rate
-  // Set compass sample rate: between 4-100Hz
-
-  imu.setCompassSampleRate(IMU_COMPASS_SAMPLE_RATE);
 
   // Configure digital motion processor
   unsigned short dmpFeatureMask = 0;
   dmpFeatureMask |= DMP_FEATURE_SEND_RAW_GYRO;
   dmpFeatureMask |= DMP_FEATURE_SEND_RAW_ACCEL;
-  dmpFeatureMask |= DMP_FEATURE_6X_LP_QUAT;
 
   imu.dmpBegin(dmpFeatureMask, DMP_SAMPLE_RATE);
 
