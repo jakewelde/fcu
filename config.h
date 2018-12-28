@@ -4,14 +4,23 @@
 #define LOG_PORT SERIAL_PORT_USBVIRTUAL
 #define SERIAL_BAUD_RATE 115200 // Serial port baud
 
+///////
+// K //
+///////
+#define K 1
 
 /////////////////////////
 // Physical Parameters //
 /////////////////////////
+#define G 9.81
 #define MASS  .5 // kg
-#define JXX  .01 // kg*m^2
-#define JYY  .01 // kg*m^2
-#define JZZ  .03 // kg*m^2
+#define JXX  .001 // kg*m^2
+#define JYY  .001 // kg*m^2
+#define JZZ  .001 // kg*m^2
+#define KF .03 // N s^2
+#define KM .01 // N s^2
+#define L .5  // m
+
 
 ////////////////
 // LED Config //

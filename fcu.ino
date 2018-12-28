@@ -22,14 +22,19 @@ void blinkLED()
   ledState = !ledState;
 }
 
-// to be used for gains
+// to be used for gains and trimming
 // FlashStorage(flashLogRate, unsigned short);
+
+Matrix<4,4> W;
 
 void setup()
 {
 
   // Initialize LED, interrupt input, and serial port.
   initHardware();
+
+  // invert thrust matrix
+  computeThrustMixer();
 
   // Initialize the MPU-9250. Should return true on success:
   if ( !initIMU() )
@@ -49,8 +54,8 @@ Matrix<3,3> J = {
 };
 
 // m x'' + kOm x' + kR x = 0;
-Matrix<1,1> kR = {10};
-Matrix<1,1> kOm = 0; //{sqrt(4*MASS*kR(0))};
+Matrix<1,1> kR = {K};
+Matrix<1,1> kOm = {sqrt(4*MASS*K)};
 
 Matrix<3,1> unhat(Matrix<3,3> M) {
   Matrix<3,1> v = {
@@ -77,7 +82,7 @@ float norm(Matrix<3,1> v) {
 void loop()
 {
 
-  // 1kHz loop frequency regulator
+  // control loop frequency regulator
   static uint32_t lastUpdate = 0;
   uint32_t now = micros();
   if (now - lastUpdate < CONTROL_DT) {
@@ -85,6 +90,7 @@ void loop()
   }
   lastUpdate = now;
 
+  // LED heartbeat
   if(now - lastBlink > BLINK_RATE) {
     blinkLED();
     lastBlink = now;
@@ -97,14 +103,15 @@ void loop()
   if ( imu.dmpUpdateFifo() != INV_SUCCESS )
     return; // If that fails (uh, oh), return to top
 
+  // convert sensor readings to SI units
   float ax = imu.calcAccel(imu.ax);
   float ay = imu.calcAccel(imu.ay);
   float az = imu.calcAccel(imu.az);
-
   float gx = imu.calcGyro(imu.gx) * 0.0174533f;
   float gy = imu.calcGyro(imu.gy) * 0.0174533f;
   float gz = imu.calcGyro(imu.gz) * 0.0174533f;
 
+  // estimate orientation
   filter.updateIMU(gx, gy, gz, ax, ay, az);
 
   Matrix<3,1> Om = {gx, gy, gz};
@@ -114,73 +121,65 @@ void loop()
   float qy = filter.qy();
   float qz = filter.qz();
 
-  // LOG_PORT << qw << "\t" << qx << "\t" << qy << "\t" << qz << "\n";
-
   Matrix<3,3> R = {
     1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw,     2*qx*qz + 2*qy*qw,
     2*qx*qy + 2*qz*qw,     1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw,
     2*qx*qz - 2*qy*qw,     2*qy*qz + 2*qx*qw,     1 - 2*qx*qx - 2*qy*qy
   };
 
-  //
-  // Matrix<3,3> Rc = {
-  //   1, 0, 0,
-  //   0, 1, 0,
-  //   0, 0, 1
-  // };
-  //
-  // Matrix<3,1> Omc = {0,0,0};
-  // Matrix<3,1> Omc_dot = {0,0,0};
-  //
-  // Matrix<3,1> eR = unhat((~Rc)*R - (~R)*Rc)*Matrix<1,1>(.5);
-  // Matrix<3,1> eOm = Om - (~R)*Rc*Omc;
-  //
-  // Matrix<3,1> M = - eR*kR; // - eOm*kOm + hat(Om)*J*Om - J*(hat(Om)*(~R)*Rc*Omc - (~R)*Rc*Omc_dot);
-  //
-  // float angle = 2 * acos(qw);
-  // float x = qx / sqrt(1-qw*qw);
-  // float y = qy / sqrt(1-qw*qw);
-  // float z = qz / sqrt(1-qw*qw);
+  // TODO : get desired orientations from RX/TX
+  Matrix<3,3> Rc = {
+    1, 0, 0,
+    0, 1, 0,
+    0, 0, 1
+  };
+  Matrix<3,1> Omc = {0,0,0};
+  Matrix<3,1> Omc_dot = {0,0,0};
+  double f = 9.81*MASS;
+  //  TODO: trimming
 
-  LOG_PORT.print("Orientation:\t");
-  for(int r = 0; r < 3; r++) {
-    for(int c = 0; c < 3; c++) {
-      LOG_PORT.print(R(r,c));
-      LOG_PORT.print("\t");
+  // Compute errors
+  Matrix<3,1> eR = unhat((~Rc)*R - (~R)*Rc)*Matrix<1,1>(.5);
+  Matrix<3,1> eOm = Om - (~R)*Rc*Omc;
+
+  // Compute control inputs
+  Matrix<3,1> M = - eR*kR - eOm*kOm + hat(Om)*J*Om - J*(hat(Om)*(~R)*Rc*Omc - (~R)*Rc*Omc_dot);
+
+  Matrix<4,1> u = {f,M(0),M(1),M(2)};
+  Matrix<4,1> wsq = W*u;
+  Matrix<4,1> w;
+  for(int i = 0; i < 4; i++) {
+    if(wsq(i) > 0) {
+      w(i) = sqrt(wsq(i));
+    } else {
+      w(i) = 0;
     }
   }
-  for(int i = 0; i < 3; i++) {
-    LOG_PORT.print(Om(i));
-    LOG_PORT.print("\t");
-  }
+
+  // TODO : voltage compensation and monitoring
+
+  // TODO : motor control
+
+  // Print estimation and control data
+  // LOG_PORT.print("Orientation:\t");
+  // for(int r = 0; r < 3; r++) {
+  //   for(int c = 0; c < 3; c++) {
+  //     LOG_PORT.print(R(r,c));
+  //     LOG_PORT.print("\t");
+  //   }
+  // }
+  // for(int i = 0; i < 3; i++) {
+  //   LOG_PORT.print(Om(i));
+  //   LOG_PORT.print("\t");
+  // }
+  //
+  // LOG_PORT << M(0) << '\t' << M(1) << '\t' << M(2) << '\t';
+  LOG_PORT << u(0) << '\t' << u(1) << '\t' << u(2) << '\t'  << u(3) << '\t';
+  LOG_PORT << wsq(0) << '\t' << wsq(1) << '\t' << wsq(2) << '\t'  << wsq(3) << '\t';
+  LOG_PORT << w(0) << '\t' << w(1) << '\t' << w(2) << '\t'  << w(3) << '\t';
   LOG_PORT.println();
 
-  // LOG_PORT << "R: " << R << '\n';
-  // LOG_PORT << Om(0) << ',' << Om(1) << ',' << Om(2) << '\n';
-  // LOG_PORT << M(0) << ',' << M(1) << ',' << M(2) << '\n';
-  // LOG_PORT << x << ',' << y << ',' << z << ',' << angle << '\n';
-
-  // LOG_PORT << "M: " << M << '\n';
-  // printForVis();
-  // LOG_PORT << unhat(hat(Matrix<3,1>({1,2,3}))) << "\n";
-
-}
-
-void printForVis() {
-
-    float yaw;
-    float pitch;
-    float roll;
-
-    roll = filter.getRoll();
-    pitch = filter.getPitch();
-    yaw = filter.getYaw();
-    LOG_PORT.print("Orientation: ");
-    LOG_PORT.print(yaw);
-    LOG_PORT.print(" ");
-    LOG_PORT.print(pitch);
-    LOG_PORT.print(" ");
-    LOG_PORT.println(roll);
+  // LOG_PORT << W << "\n";
 
 }
 
@@ -226,4 +225,14 @@ bool initIMU(void)
 
   return true; // Return success
 
+}
+
+void computeThrustMixer(){
+  Matrix<4,4> V = {
+       KF,   KF,   KF,    KF,
+        0, L*KF,    0, -L*KF,
+    -L*KF,    0, L*KF,     0,
+       KM,  -KM,   KM,   -KM
+  };
+  W = V.Inverse();
 }
