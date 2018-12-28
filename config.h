@@ -4,12 +4,20 @@
 #define LOG_PORT SERIAL_PORT_USBVIRTUAL
 #define SERIAL_BAUD_RATE 115200 // Serial port baud
 
+
+/////////////////////////
+// Physical Parameters //
+/////////////////////////
+#define MASS  .5 // kg
+#define JXX  .01 // kg*m^2
+#define JYY  .01 // kg*m^2
+#define JZZ  .03 // kg*m^2
+
 ////////////////
 // LED Config //
 ////////////////
 #define HW_LED_PIN 13        // LED attached to pin 13
 #define BLINK_RATE 250000 // Blink rate when only UART logging
-
 
 ///////////////////////////
 // Control and Filtering //

@@ -1,25 +1,22 @@
 import processing.serial.*;
 Serial myPort;
 
-float yaw = 0.0;
-float pitch = 0.0;
-float roll = 0.0;
+//float yaw = 0.0;
+//float pitch = 0.0;
+//float roll = 0.0;
 
 void setup()
 {
   size(600, 500, P3D);
 
-  // if you have only ONE serial port active
-  //myPort = new Serial(this, Serial.list()[0], 9600); // if you have only ONE serial port active
-
-  // if you know the serial port name
-  //myPort = new Serial(this, "COM5:", 9600);                    // Windows
-  //myPort = new Serial(this, "/dev/ttyACM0", 9600);             // Linux
-  myPort = new Serial(this, "/dev/cu.usbmodem14101", 115200);  // Mac
+  myPort = new Serial(this, "/dev/cu.usbmodem14201", 115200);
 
   textSize(16); // set text size
   textMode(SHAPE); // set text mode to shape
 }
+
+float R[][] =  { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} };   
+float Om[ ] = {0,0,0};
 
 void draw()
 {
@@ -28,30 +25,32 @@ void draw()
   lights();
 
   translate(width/2, height/2); // set position to centre
+  rotateX(-PI/2); // for camera perspective
 
-  pushMatrix(); // begin object
-
-  float c1 = cos(radians(roll));
-  float s1 = sin(radians(roll));
-  float c2 = cos(radians(-pitch));
-  float s2 = sin(radians(-pitch));
-  float c3 = cos(radians(-yaw));
-  float s3 = sin(radians(-yaw));
-  applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
-               -s2, c1*c2, c2*s1, 0,
-               c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
+  pushMatrix();
+  
+  // Processing uses a left-handed coordinate system, who are these people??? 
+  applyMatrix( -R[0][0], -R[0][1], -R[0][2], 0,
+               -R[1][0], -R[1][1], -R[1][2], 0,
+               -R[2][0], -R[2][1], -R[2][2], 0,
                0, 0, 0, 1);
 
   drawArduino();
 
-  popMatrix(); // end of object
+  popMatrix();
 
-  // Print values to console
-  print(roll);
-  print("\t");
-  print(pitch);
-  print("\t");
-  print(yaw);
+  for (int r = 0; r < 3; r++) {
+    for (int c = 0; c < 3; c++) {
+      print(R[r][c]);
+      print("\t");
+    }
+    println();
+  }
+  print("Om: ");
+  for (int c = 0; c < 3; c++) {
+    print(Om[c]);
+    print("\t");
+  }
   println();
 }
 
@@ -62,11 +61,20 @@ void serialEvent()
   do {
     message = myPort.readStringUntil(newLine); // read from port until new line
     if (message != null) {
-      String[] list = split(trim(message), " ");
-      if (list.length >= 4 && list[0].equals("Orientation:")) {
-        yaw = float(list[1]); // convert to float yaw
-        pitch = float(list[2]); // convert to float pitch
-        roll = float(list[3]); // convert to float roll
+      String[] list = split(trim(message), "\t");
+      if (list.length >= 13 && list[0].equals("Orientation:")) {
+        R[0][0] = float(list[1]); // convert to float yaw
+        R[0][1] = float(list[2]); // convert to float yaw
+        R[0][2] = float(list[3]); // convert to float yaw
+        R[1][0] = float(list[4]); // convert to float yaw
+        R[1][1] = float(list[5]); // convert to float yaw
+        R[1][2] = float(list[6]); // convert to float yaw
+        R[2][0] = float(list[7]); // convert to float yaw
+        R[2][1] = float(list[8]); // convert to float yaw
+        R[2][2] = float(list[9]); // convert to float yaw
+        Om[0]   = float(list[10]); // convert to float yaw
+        Om[1]   = float(list[11]); // convert to float yaw
+        Om[2]   = float(list[12]); // convert to float yaw
       }
     }
   } while (message != null);
@@ -74,17 +82,15 @@ void serialEvent()
 
 void drawArduino()
 {
-  /* function contains shape(s) that are rotated with the IMU */
-  stroke(90, 0, 0); // set outline colour to darker teal
-  fill(160, 0, 0); // set fill colour to lighter teal
-  box(200, 10, 200); // draw Arduino board base shape
+  
+  fill(200, 200, 200); // set outline colour to darker teal
+  stroke(10); // set fill colour to lighter teal
+  box(100, 100, 5); // draw Arduino board base shape
 
-  stroke(0); // set outline colour to black
-  fill(80); // set fill colour to dark grey
-
-  translate(-30, -5, 0); // set position to edge of Arduino box
-  box(50, 10, 50); // draw pin header as box
-
-  translate(100, 0, 10); // set position to other edge of Arduino box
-  box(20, 10, 20); // draw other pin header as box
+  stroke(255,0,0);
+  line(0,0,0,100,0,0);
+  stroke(0,255,0);
+  line(0,0,0,0,100,0);
+  stroke(0,0,255);
+  line(0,0,0,0,0,100);
 }

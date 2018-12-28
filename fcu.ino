@@ -42,9 +42,37 @@ void setup()
 
 }
 
-float yaw;
-float pitch;
-float roll;
+Matrix<3,3> J = {
+  JXX,   0,   0,
+    0, JYY,   0,
+    0,   0, JZZ
+};
+
+// m x'' + kOm x' + kR x = 0;
+Matrix<1,1> kR = {10};
+Matrix<1,1> kOm = 0; //{sqrt(4*MASS*kR(0))};
+
+Matrix<3,1> unhat(Matrix<3,3> M) {
+  Matrix<3,1> v = {
+    -M(1,2), M(0,2), -M(0,1)
+  };
+  return v;
+}
+
+Matrix<3,3> hat(Matrix<3,1> v) {
+  Matrix<3,3> M = {
+    0,    -v(2),  v(1),
+    v(2),     0, -v(0),
+    -v(1), v(0),     0
+  };
+  return M;
+}
+
+float norm(Matrix<3,1> v) {
+  return sqrt(v(0) * v(0) + v(1) * v(1) + v(2) * v(2));
+}
+
+
 
 void loop()
 {
@@ -73,32 +101,88 @@ void loop()
   float ay = imu.calcAccel(imu.ay);
   float az = imu.calcAccel(imu.az);
 
-  float gx = imu.calcGyro(imu.gx);
-  float gy = imu.calcGyro(imu.gy);
-  float gz = imu.calcGyro(imu.gz);
+  float gx = imu.calcGyro(imu.gx) * 0.0174533f;
+  float gy = imu.calcGyro(imu.gy) * 0.0174533f;
+  float gz = imu.calcGyro(imu.gz) * 0.0174533f;
 
   filter.updateIMU(gx, gy, gz, ax, ay, az);
 
-  roll = filter.getRoll();
-  pitch = filter.getPitch();
-  yaw = filter.getYaw();
-  LOG_PORT.print("Orientation: ");
-  LOG_PORT.print(yaw);
-  LOG_PORT.print(" ");
-  LOG_PORT.print(pitch);
-  LOG_PORT.print(" ");
-  LOG_PORT.println(roll);
+  Matrix<3,1> Om = {gx, gy, gz};
+
+  float qw = filter.qw();
+  float qx = filter.qx();
+  float qy = filter.qy();
+  float qz = filter.qz();
+
+  // LOG_PORT << qw << "\t" << qx << "\t" << qy << "\t" << qz << "\n";
+
+  Matrix<3,3> R = {
+    1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw,     2*qx*qz + 2*qy*qw,
+    2*qx*qy + 2*qz*qw,     1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw,
+    2*qx*qz - 2*qy*qw,     2*qy*qz + 2*qx*qw,     1 - 2*qx*qx - 2*qy*qy
+  };
+
+  //
+  // Matrix<3,3> Rc = {
+  //   1, 0, 0,
+  //   0, 1, 0,
+  //   0, 0, 1
+  // };
+  //
+  // Matrix<3,1> Omc = {0,0,0};
+  // Matrix<3,1> Omc_dot = {0,0,0};
+  //
+  // Matrix<3,1> eR = unhat((~Rc)*R - (~R)*Rc)*Matrix<1,1>(.5);
+  // Matrix<3,1> eOm = Om - (~R)*Rc*Omc;
+  //
+  // Matrix<3,1> M = - eR*kR; // - eOm*kOm + hat(Om)*J*Om - J*(hat(Om)*(~R)*Rc*Omc - (~R)*Rc*Omc_dot);
+  //
+  // float angle = 2 * acos(qw);
+  // float x = qx / sqrt(1-qw*qw);
+  // float y = qy / sqrt(1-qw*qw);
+  // float z = qz / sqrt(1-qw*qw);
+
+  LOG_PORT.print("Orientation:\t");
+  for(int r = 0; r < 3; r++) {
+    for(int c = 0; c < 3; c++) {
+      LOG_PORT.print(R(r,c));
+      LOG_PORT.print("\t");
+    }
+  }
+  for(int i = 0; i < 3; i++) {
+    LOG_PORT.print(Om(i));
+    LOG_PORT.print("\t");
+  }
+  LOG_PORT.println();
+
+  // LOG_PORT << "R: " << R << '\n';
+  // LOG_PORT << Om(0) << ',' << Om(1) << ',' << Om(2) << '\n';
+  // LOG_PORT << M(0) << ',' << M(1) << ',' << M(2) << '\n';
+  // LOG_PORT << x << ',' << y << ',' << z << ',' << angle << '\n';
+
+  // LOG_PORT << "M: " << M << '\n';
+  // printForVis();
+  // LOG_PORT << unhat(hat(Matrix<3,1>({1,2,3}))) << "\n";
 
 }
 
-// Matrix<3,3> rotationFromQuaternion(float qw, float qx, float qy, float qz) {
-//   Matrix<3,3> R = {
-//     1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw,     2*qx*qz + 2*qy*qw,
-//     2*qx*qy + 2*qz*qw,     1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw,
-//     2*qx*qz - 2*qy*qw,     2*qy*qz + 2*qx*qw,     1 - 2*qx*qx - 2*qy*qy
-//   };
-//   return R;
-// }
+void printForVis() {
+
+    float yaw;
+    float pitch;
+    float roll;
+
+    roll = filter.getRoll();
+    pitch = filter.getPitch();
+    yaw = filter.getYaw();
+    LOG_PORT.print("Orientation: ");
+    LOG_PORT.print(yaw);
+    LOG_PORT.print(" ");
+    LOG_PORT.print(pitch);
+    LOG_PORT.print(" ");
+    LOG_PORT.println(roll);
+
+}
 
 void initHardware(void)
 {
